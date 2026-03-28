@@ -13,7 +13,7 @@ import AutonomyStep from "@/components/steps/AutonomyStep";
 import CascadeResults from "@/components/CascadeResults";
 import { type JobAnalysisInput, type CascadeOutput, DEFAULT_FORM_DATA } from "@/types/jobAnalysis";
 import { generateCascade, mergeCompetencyProficiencyLevels } from "@/lib/cascadeEngine";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchCascadeFromRemote } from "@/lib/cascadeRemote";
 import { useToast } from "@/hooks/use-toast";
 
 const STEPS = ["Basic Info", "Tasks", "Requirements", "Skills", "KPIs & Risks", "Tools", "Autonomy"];
@@ -40,30 +40,17 @@ const Index = () => {
 
     setIsGenerating(true);
     try {
-      // Call AI-powered edge function
-      const { data, error } = await supabase.functions.invoke("generate-cascade", {
-        body: { formData },
-      });
-
-      if (error) {
-        console.error("Edge function error:", error);
-        throw new Error(error.message || "AI generation failed");
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
+      const data = await fetchCascadeFromRemote(formData);
       setOutput(mergeCompetencyProficiencyLevels(data as CascadeOutput, formData));
       setView("results");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Generation failed:", err);
+      const message = err instanceof Error ? err.message : "Remote generation failed.";
       toast({
-        title: "AI Generation Failed",
-        description: "Falling back to local engine. " + (err.message || ""),
-        variant: "destructive",
+        title: "AI unavailable — using offline cascade",
+        description: `${message} Showing the built-in template engine output.`,
+        variant: "default",
       });
-      // Fallback to local template engine
       const result = generateCascade(formData);
       setOutput(mergeCompetencyProficiencyLevels(result, formData));
       setView("results");
